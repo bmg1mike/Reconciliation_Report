@@ -1,0 +1,11 @@
+Create 
+
+NipInwardTransactions
+NipOutwardTransactions
+NipOutwardBatch
+NipInwardBatch
+
+NipInwardTransactions_Reconciled
+NipOutwardTransactions_Reconciled
+NipOutwardBatch_Reconciled
+NipInwardBatch_Reconciled
