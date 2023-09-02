@@ -1,6 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Domain;
 using Microsoft.AspNetCore.Mvc;
-using ReconciliationReport.DTOs;
 using ReconciliationReport.Services.Interface;
 
 namespace ReconciliationReport.Controllers
@@ -16,10 +15,16 @@ namespace ReconciliationReport.Controllers
             this.service = service;
         }
 
-        [HttpPost("UploadFile")]
-        public async Task<IActionResult> UploadReportFile([FromForm] UploadFileDto request)
+        [HttpPost("UploadFileForInward")]
+        public async Task<IActionResult> UploadFileForInward([FromForm] UploadFileDto request)
         {
-            var report = await service.UploadFile(request);
+            var report = await service.UploadFile(request,"Inward");
+            return Ok(report);
+        }
+        [HttpPost("UploadFileForOutward")]
+        public async Task<IActionResult> UploadFileForOutward([FromForm] UploadFileDto request)
+        {
+            var report = await service.UploadFile(request,"Outward");
             return Ok(report);
         }
     }

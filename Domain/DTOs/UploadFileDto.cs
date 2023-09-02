@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 
-namespace ReconciliationReport.DTOs
+namespace Domain
 {
     public class UploadFileDto
     {

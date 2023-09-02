@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Domain;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ReconciliationReport.Common;
 using ReconciliationReport.Data;
-using ReconciliationReport.DTOs;
 using ReconciliationReport.Entities;
 using ReconciliationReport.Services.Interface;
 using System.IO;
@@ -20,7 +20,7 @@ namespace ReconciliationReport.Services.Implementation
             _context = context;
         }
 
-        public async Task<Result<string>> UploadFile(UploadFileDto request)
+        public async Task<Result<string>> UploadFile(UploadFileDto request, string fileType)
         {
             try
             {
@@ -58,20 +58,20 @@ namespace ReconciliationReport.Services.Implementation
 
                 var uploadsFolder = dir;
                 var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-                using(var stream = new FileStream(filePath,FileMode.Create))
+                using (var stream = new FileStream(filePath, FileMode.Create))
                 {
                     await request.File.CopyToAsync(stream);
                 }
-                
 
-                if (request.File.FileName.Contains("inwards"))
+
+                if (fileType == "Inward")
                 {
                     var reports = ReadInwardReport(filePath, batchId); // 63851
                     validInwardReport = reports.Where(x => x.CHANNEL != null).ToList();
                     validInwardReport = validInwardReport.Where(x => x.CHANNEL.Contains("CHANNEL") == false).ToList();
                     inwardBatch.BatchId = batchId;
                     inwardBatch.FileName = uniqueFileName;
-                    
+
                     await _context.NipInwardBatches.AddAsync(inwardBatch);
                     await _context.InwardReports.AddRangeAsync(validInwardReport);
                 }
@@ -121,18 +121,18 @@ namespace ReconciliationReport.Services.Implementation
                     }
                     else if (inwardTransaction is not null)
                     {
-                        if (inwardTransaction.TransactionProcessed == 1 
-                            && inwardTransaction.Requery == "00" 
+                        if (inwardTransaction.TransactionProcessed == 1
+                            && inwardTransaction.Requery == "00"
                             && !string.IsNullOrEmpty(inwardTransaction.VtellerPrinRsp)
                             && inwardTransaction.TransactionProcessedDate != null
-                            && inwardTransaction.Approvevalue == 1 
+                            && inwardTransaction.Approvevalue == 1
                             && inwardTransaction.ResponseCode == "00"
                             && (inwardTransaction.InwardType == 1
                                 || inwardTransaction.InwardType == 2
                                 || inwardTransaction.InwardType == 5))
                         {
                             item.TransactionExist = true;
-                            item.IsProcessed  = true;
+                            item.IsProcessed = true;
                             item.IsCredited = true;
 
                             await _context.SaveChangesAsync();
@@ -145,13 +145,13 @@ namespace ReconciliationReport.Services.Implementation
                         item.IsCredited = false;
 
                         await _context.SaveChangesAsync();
-                    }   
+                    }
                 }
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,ex.Message);
+                _logger.LogError(ex, ex.Message);
             }
         }
         public async Task CompareOutward()
@@ -178,7 +178,7 @@ namespace ReconciliationReport.Services.Implementation
                         if (outwardTransaction.KafkaStatus == "Processed")
                         {
                             item.TransactionExist = true;
-                            item.IsProcessed  = true;
+                            item.IsProcessed = true;
                             item.IsDebited = true;
 
                             await _context.SaveChangesAsync();
@@ -191,13 +191,13 @@ namespace ReconciliationReport.Services.Implementation
                         item.IsDebited = false;
 
                         await _context.SaveChangesAsync();
-                    }   
+                    }
                 }
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,ex.Message);
+                _logger.LogError(ex, ex.Message);
             }
         }
         private List<InwardReport> ReadInwardReport(string path, string batchId)
@@ -224,25 +224,25 @@ namespace ReconciliationReport.Services.Implementation
         {
             var report = new InwardReport();
             var values = uploadValues.Split(',');
-            if(values.Length != 15)
+            if (values.Length != 15)
             {
                 return new InwardReport();
             }
             report.BatchId = batchId;
-            report.CHANNEL = values[1].Replace("\"",string.Empty);
-            report.SESSION_ID = values[2].Replace("\"",string.Empty);;
-            report.TRANSACTION_TYPE = values[3].Replace("\"",string.Empty);;
-            report.RESPONSE = values[4].Replace("\"",string.Empty);;
-            report.Amount = values[5].Replace("\"",string.Empty);;
-            report.TRANSACTION_TIME = values[6].Replace("\"",string.Empty);;
-            report.ORIGINATOR_INSTITUTION = values[7].Replace("\"",string.Empty);;
-            report.ORIGINATOR = values[8].Replace("\"",string.Empty);;
-            report.DESTINATION_INSTITUTION = values[9].Replace("\"",string.Empty);;
-            report.DESTINATION_ACCOUNT_NAME = values[10].Replace("\"",string.Empty);;
-            report.DESTINATION_ACCOUNT_NO = values[11].Replace("\"",string.Empty);;
-            report.NARRATION = values[12].Replace("\"",string.Empty);;
-            report.PAYMENT_REFERENCE = values[13].Replace("\"",string.Empty);;
-            report.LAST_12_DIGITS_OF_SESSION_ID = values[14].Replace("\"",string.Empty);;
+            report.CHANNEL = values[1].Replace("\"", string.Empty);
+            report.SESSION_ID = values[2].Replace("\"", string.Empty); ;
+            report.TRANSACTION_TYPE = values[3].Replace("\"", string.Empty); ;
+            report.RESPONSE = values[4].Replace("\"", string.Empty); ;
+            report.Amount = values[5].Replace("\"", string.Empty); ;
+            report.TRANSACTION_TIME = values[6].Replace("\"", string.Empty); ;
+            report.ORIGINATOR_INSTITUTION = values[7].Replace("\"", string.Empty); ;
+            report.ORIGINATOR = values[8].Replace("\"", string.Empty); ;
+            report.DESTINATION_INSTITUTION = values[9].Replace("\"", string.Empty); ;
+            report.DESTINATION_ACCOUNT_NAME = values[10].Replace("\"", string.Empty); ;
+            report.DESTINATION_ACCOUNT_NO = values[11].Replace("\"", string.Empty); ;
+            report.NARRATION = values[12].Replace("\"", string.Empty); ;
+            report.PAYMENT_REFERENCE = values[13].Replace("\"", string.Empty); ;
+            report.LAST_12_DIGITS_OF_SESSION_ID = values[14].Replace("\"", string.Empty); ;
             report.IsProcessed = false;
             report.EntryDate = DateTime.UtcNow;
             report.IsCredited = false;

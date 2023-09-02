@@ -30,4 +30,18 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+using var scope = app.Services.CreateScope();
+var services = scope.ServiceProvider;
+
+try
+{
+    var context = services.GetRequiredService<ReconciliationContext>();
+    await context.Database.MigrateAsync();
+}
+catch (Exception ex)
+{
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "An error occured during migration");
+}
+
 app.Run();
