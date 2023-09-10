@@ -129,6 +129,11 @@ public class ReconciliationService : IReconciliationService
 
             var parallel = Parallel.ForEach(inwardReports, async item =>
             {
+                if (item.SESSION_ID[0].Equals("'"))
+                {
+                    item.SESSION_ID.Replace("'", string.Empty);
+                }
+
                 using var dbContext = scopeFactory.CreateScope();
                 var context = dbContext.ServiceProvider.GetRequiredService<NipContext>();
                 var inwardTransaction = await context.NIPInboundTransactions.Where(x => x.SessionId == item.SESSION_ID).FirstOrDefaultAsync();
@@ -153,6 +158,7 @@ public class ReconciliationService : IReconciliationService
                         item.TransactionExist = true;
                         item.IsProcessed = true;
                         item.IsCredited = true;
+                        item.Remark = "Transaction not touched";
 
                         await context.SaveChangesAsync();
                     }
@@ -162,6 +168,20 @@ public class ReconciliationService : IReconciliationService
                         if (item.RESPONSE == "Approved or Completed Successfully")
                         {
                             // credit transaction
+                            var creditCustomer = await CreditTransaction(item);
+                            if (creditCustomer)
+                            {
+                                item.TransactionExist = true;
+                                item.IsProcessed = true;
+                                item.IsCredited = true;
+                                item.Remark = "Transaction was creditted because it was successful from Nibbs";
+                            }
+                            else
+                            {
+                                item.TransactionExist = true;
+                                item.IsProcessed = false;
+                                item.IsCredited = false;
+                            }
                         }
                     }
                 }
@@ -180,44 +200,6 @@ public class ReconciliationService : IReconciliationService
             {
                 _logger.LogInformation("Completed all inward transactions for the day");
             }
-            // foreach (var item in inwardReports)
-            // {
-            //     var inwardTransaction = await _context.NIPInboundTransactions.Where(x => x.SessionId == item.SESSION_ID).FirstOrDefaultAsync();
-
-            //     if (inwardTransaction == null)
-            //     {
-            //         item.IsProcessed = true;
-            //         item.TransactionExist = false;
-            //         continue;
-            //     }
-            //     else if (inwardTransaction is not null)
-            //     {
-            //         if (inwardTransaction.TransactionProcessed == 1
-            //             && inwardTransaction.Requery == "00"
-            //             && !string.IsNullOrEmpty(inwardTransaction.VtellerPrinRsp)
-            //             && inwardTransaction.TransactionProcessedDate != null
-            //             && inwardTransaction.Approvevalue == 1
-            //             && inwardTransaction.ResponseCode == "00"
-            //             && (inwardTransaction.InwardType == 1
-            //                 || inwardTransaction.InwardType == 2
-            //                 || inwardTransaction.InwardType == 5))
-            //         {
-            //             item.TransactionExist = true;
-            //             item.IsProcessed = true;
-            //             item.IsCredited = true;
-
-            //             await _context.SaveChangesAsync();
-            //         }
-            //     }
-            //     else
-            //     {
-            //         item.IsProcessed = true;
-            //         item.TransactionExist = true;
-            //         item.IsCredited = false;
-
-            //         await _context.SaveChangesAsync();
-            //     }
-            // }
 
         }
         catch (Exception ex)
@@ -241,8 +223,14 @@ public class ReconciliationService : IReconciliationService
             {
                 try
                 {
+                    if (item.SESSION_ID[0].Equals("'"))
+                    {
+                        item.SESSION_ID.Replace("'", string.Empty);
+                    }
+
                     using var dbContext = scopeFactory.CreateScope();
                     var context = dbContext.ServiceProvider.GetRequiredService<NipContext>();
+
                     var outwardTransaction = await context.NIPOutwardTransactions.Where(x => x.SessionID == item.SESSION_ID).FirstOrDefaultAsync();
                     if (outwardTransaction == null)
                     {
@@ -257,6 +245,7 @@ public class ReconciliationService : IReconciliationService
                             item.TransactionExist = true;
                             item.IsProcessed = true;
                             item.IsDebited = true;
+                            item.Remark = "Transaction not touched";
 
                             await context.SaveChangesAsync();
                         }
@@ -271,12 +260,24 @@ public class ReconciliationService : IReconciliationService
                                     item.TransactionExist = true;
                                     item.IsProcessed = true;
                                     item.IsDebited = true;
+                                    item.Remark = "Transaction was debitted because it was successful from Nibbs";
                                 }
                                 else
                                 {
                                     item.TransactionExist = true;
+                                    item.IsProcessed = false;
+                                    item.IsDebited = false;
+                                }
+                            }
+                            else
+                            {
+                                var isReversed = await ReverseTransaction(outwardTransaction);
+                                if (isReversed)
+                                {
+                                    item.TransactionExist = true;
                                     item.IsProcessed = true;
                                     item.IsDebited = false;
+                                    item.Remark = $"Transaction not successfully and the money has been Reverseed ";
                                 }
                             }
                         }
@@ -300,36 +301,6 @@ public class ReconciliationService : IReconciliationService
             {
                 _logger.LogInformation("Completed all outward transactions for the day");
             }
-            //     foreach (var item in outwardReports)
-            //     {
-            //         var outwardTransaction = await _context.NIPOutwardTransactions.Where(x => x.SessionID == item.SESSION_ID).FirstOrDefaultAsync();
-
-            //         if (outwardTransaction == null)
-            //         {
-            //             item.IsProcessed = true;
-            //             item.TransactionExist = false;
-            //             continue;
-            //         }
-            //         else if (outwardTransaction is not null)
-            //         {
-            //             if (outwardTransaction.KafkaStatus == "Processed")
-            //             {
-            //                 item.TransactionExist = true;
-            //                 item.IsProcessed = true;
-            //                 item.IsDebited = true;
-
-            //                 await _context.SaveChangesAsync();
-            //             }
-            //         }
-            //         else
-            //         {
-            //             item.IsProcessed = true;
-            //             item.TransactionExist = true;
-            //             item.IsDebited = false;
-
-            //             await _context.SaveChangesAsync();
-            //         }
-            //     }
 
         }
         catch (Exception ex)
@@ -432,10 +403,10 @@ public class ReconciliationService : IReconciliationService
             };
 
             _logger.LogInformation($"Reversal Request : \t{JsonConvert.SerializeObject(payload)}");
-
+            var token = await GetAccessToken();
             var requestMessage = new HttpRequestMessage(HttpMethod.Post, url);
             requestMessage.Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
-            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var client = clientFactory.CreateClient();
             var response = await client.SendAsync(requestMessage);
@@ -472,19 +443,27 @@ public class ReconciliationService : IReconciliationService
             var url = config["FundTransfer:SingleCallDebit"];
             var payload = new DebitRequest
             {
-                ChannelID = (int)transaction.ChannelCode,
+                ChannelID = transaction.AppId.Value,
                 CreditCurrency = transaction.CurrencyCode,
                 DebitCurrency = transaction.CurrencyCode,
                 PrincipalDebitAccount = transaction.DebitAccountNumber,//"NGN1250100062001",
                 PrincipalCreditAccount = transaction.CreditAccountNumber,
                 TransactionNarration = "Reconciliation Reversal",
                 FeeAmount = 10,
-                // PrincipalAmount = transaction.Amount
+                PrincipalAmount = transaction.Amount.Value,
+                TransactionDebitType = transaction.OutwardTransactionType.Value,
+                TransactionReference = transaction.PaymentReference,
+                VatAmount = 10,
+                VatCreditAccount = transaction.CreditAccountNumber,
+                VatDebitAccount = transaction.DebitAccountNumber,
+                FtCommissionTypes = "Credit",
+                TransactionFeeCode = 10
             };
             _logger.LogInformation($"Debit Transaction Request : \t{JsonConvert.SerializeObject(payload)}");
+            var token = await GetAccessToken();
             var requestMessage = new HttpRequestMessage(HttpMethod.Post, url);
             requestMessage.Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
-            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var client = clientFactory.CreateClient();
             var response = await client.SendAsync(requestMessage);
@@ -508,5 +487,89 @@ public class ReconciliationService : IReconciliationService
             return false;
         }
 
+    }
+    private async Task<bool> CreditTransaction(InwardReport report)
+    {
+        try
+        {
+            var url = config["FundTransfer:SingleCallDebit"];
+            var payload = new DebitRequest
+            {
+                ChannelID = 7,
+                CreditCurrency = "NGN",
+                DebitCurrency = "NGN",
+                PrincipalDebitAccount = "NGN1250100062001", // confifg
+                PrincipalCreditAccount = report.DESTINATION_ACCOUNT_NO,
+                TransactionNarration = report.NARRATION,
+                FeeAmount = 10,
+                PrincipalAmount = Convert.ToDecimal(report.Amount),
+                TransactionDebitType = 1,
+                TransactionReference = report.PAYMENT_REFERENCE,
+                VatAmount = 10,
+                VatCreditAccount = "NGN1250100062001", // config
+                VatDebitAccount = "NGN1250100062001", // config,
+                FtCommissionTypes = "Credit",
+                TransactionFeeCode = 10
+            };
+            _logger.LogInformation($"Debit Transaction Request : \t{JsonConvert.SerializeObject(payload)}");
+            var token = await GetAccessToken();
+            var requestMessage = new HttpRequestMessage(HttpMethod.Post, url);
+            requestMessage.Content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+            requestMessage.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var client = clientFactory.CreateClient();
+            var response = await client.SendAsync(requestMessage);
+            var result = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var reversalResponse = JsonConvert.DeserializeObject<DebitResponse>(result);
+                if (reversalResponse?.IsSuccess == true)
+                {
+                    return true;
+                }
+
+            }
+            _logger.LogError($"Debit Transaction Response : \t {result}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogInformation(ex, ex.Message);
+            return false;
+        }
+
+    }
+
+    private async Task<string> GetAccessToken()
+    {
+        try
+        {
+            var url = config["FundTransfer:TokenUrl"];
+            var requestMessage = new HttpRequestMessage(HttpMethod.Get, url);
+            var client = clientFactory.CreateClient();
+            var response = await client.SendAsync(requestMessage);
+            var result = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var resultObject = JsonConvert.DeserializeObject<AccessTokenResponse>(result);
+                if (resultObject?.Content is null || string.IsNullOrEmpty(resultObject.Content.BearerToken))
+                {
+                    _logger.LogError(resultObject?.ErrorMessage);
+                    return string.Empty;
+                }
+
+                return resultObject.Content.BearerToken;
+            }
+
+            _logger.LogInformation($"Access token Error Response : \t {result}");
+            return string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, ex.Message);
+            return string.Empty;
+        }
     }
 }

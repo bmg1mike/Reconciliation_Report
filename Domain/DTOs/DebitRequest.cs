@@ -11,10 +11,10 @@ public class DebitRequest
     public string? PrincipalCreditAccount { get; set; }
 
     [JsonProperty("principalAmount")]
-    public int PrincipalAmount { get; set; }
+    public decimal PrincipalAmount { get; set; }
 
     [JsonProperty("feeAmount")]
-    public int FeeAmount { get; set; }
+    public decimal FeeAmount { get; set; }
 
     [JsonProperty("vatDebitAccount")]
     public string? VatDebitAccount { get; set; }

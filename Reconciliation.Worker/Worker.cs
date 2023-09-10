@@ -30,7 +30,7 @@ public class Worker : BackgroundService
             {
                 await reconciliationService.CompareOutward();
             }
-            await Task.Delay(TimeSpan.FromDays(1), stoppingToken);
+            await Task.Delay(TimeSpan.FromDays(Convert.ToInt16(configuration["TimeToStartInHours"])), stoppingToken);
         }
     }
 }

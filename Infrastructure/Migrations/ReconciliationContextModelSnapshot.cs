@@ -87,6 +87,10 @@ namespace Infrastructure.Migrations
                     b.Property<string>("RESPONSE")
                         .HasColumnType("text");
 
+                    b.Property<string>("Remark")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("SESSION_ID")
                         .HasColumnType("text");
 
@@ -205,6 +209,10 @@ namespace Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("RESPONSE")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Remark")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("SESSION_ID")

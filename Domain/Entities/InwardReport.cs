@@ -29,5 +29,6 @@ namespace ReconciliationReport.Entities
         public DateTime DateModified { get; set; } = DateTime.UtcNow;
         public string? CoreBankingReference { get; set; }
         public bool? TransactionExist { get; set; }
+        public string Remark { get; set; }
     }
 }
